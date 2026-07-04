@@ -17,10 +17,10 @@ public class GatewayConfig {
                         .uri("http://localhost:8081")
                 )
 
-//                .route("stock-service", route -> route
-//                        .path("/api/stocks/**")
-//                        .uri("http://localhost:8083")
-//                )
+                .route("stock-service", route -> route
+                        .path("/api/stocks/**")
+                        .uri("http://localhost:8083")
+                )
 //
 //                // Wallet Service Route - future service
 //                .route("wallet-service", route -> route
