@@ -22,11 +22,11 @@ public class GatewayConfig {
                         .uri("http://localhost:8083")
                 )
 //
-//                // Wallet Service Route - future service
-//                .route("wallet-service", route -> route
-//                        .path("/api/wallet/**")
-//                        .uri("http://localhost:8084")
-//                )
+                // Wallet Service Route - future service
+                .route("wallet-service", route -> route
+                        .path("/api/wallet/**")
+                        .uri("http://localhost:8084")
+                )
 //
 //                // Trading Service Route - future service
 //                .route("trading-service", route -> route
