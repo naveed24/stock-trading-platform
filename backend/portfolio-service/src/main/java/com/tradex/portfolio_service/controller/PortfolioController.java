@@ -1,5 +1,23 @@
 package com.tradex.portfolio_service.controller;
 
+import com.tradex.portfolio_service.service.PortfolioService;
+
+// Import your DTOs from their actual package
+import com.tradex.portfolio_service.dto.HoldingResponse;
+import com.tradex.portfolio_service.dto.PortfolioSummaryResponse;
+import com.tradex.portfolio_service.dto.PortfolioTransactionResponse;
+import com.tradex.portfolio_service.dto.PortfolioUpdateRequest;
+import com.tradex.portfolio_service.dto.UpdateHoldingPriceRequest;
+
+import jakarta.validation.Valid;
+
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
 
 
 @RestController

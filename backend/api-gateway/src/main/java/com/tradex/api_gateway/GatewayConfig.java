@@ -28,16 +28,16 @@ public class GatewayConfig {
                         .uri("http://localhost:8084")
                 )
 //
-                 Trading Service Route - future service
+                // Trading Service Route - future service
                 .route("trading-service", route -> route
                         .path("/api/orders/**")
                         .uri("http://localhost:8085")
                 )
 //
-//                .route("portfolio-service", route -> route
-//                        .path("/api/portfolio/**")
-//                        .uri("http://localhost:8086")
-//                )
+                .route("portfolio-service", route -> route
+                        .path("/api/portfolio/**")
+                        .uri("http://localhost:8086")
+                )
 
                 .build();
 
