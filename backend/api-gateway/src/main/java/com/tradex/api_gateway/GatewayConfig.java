@@ -39,6 +39,11 @@ public class GatewayConfig {
                         .uri("http://localhost:8086")
                 )
 
+                .route("trading-service-route", r -> r
+                        .path("/api/orders/**")
+                        .uri("http://localhost:8085")
+                )
+
                 .build();
 
 
