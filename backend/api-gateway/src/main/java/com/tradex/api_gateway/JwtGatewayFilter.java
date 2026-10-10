@@ -114,9 +114,12 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
     }
 
     private Mono<Void> verifyBodyOwner(ServerWebExchange exchange, GatewayFilterChain chain, long userId) {
-        return DataBufferUtils.join(exchange.getRequest().getBody()).flatMap(buffer -> {
+        return DataBufferUtils.join(exchange.getRequest().getBody())
+                .defaultIfEmpty(exchange.getResponse().bufferFactory().wrap(new byte[0]))
+                .flatMap(buffer -> {
             byte[] data = new byte[buffer.readableByteCount()];
             try { buffer.read(data); } finally { DataBufferUtils.release(buffer); }
+            if (data.length == 0) return reject(exchange, HttpStatus.BAD_REQUEST);
             try {
                 JsonNode node = json.readTree(data);
                 if (node == null || !node.has("userId") || !node.get("userId").isIntegralNumber()
@@ -131,7 +134,7 @@ public class JwtGatewayFilter implements GlobalFilter, Ordered {
                 }
             };
             return chain.filter(exchange.mutate().request(decorated).build());
-        }).switchIfEmpty(Mono.defer(() -> reject(exchange, HttpStatus.BAD_REQUEST)));
+        });
     }
 
     private Mono<Void> reject(ServerWebExchange exchange, HttpStatus status) {
