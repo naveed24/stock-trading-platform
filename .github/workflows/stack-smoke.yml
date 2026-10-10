@@ -30,7 +30,8 @@ jobs:
       - name: Wait for API and demo stock data
         run: |
           for i in $(seq 1 150); do
-            if curl --max-time 3 -fsS http://127.0.0.1:9090/api/stocks | jq -e '. | length >= 7' >/dev/null; then
+            if curl --max-time 3 -fsS http://127.0.0.1:9090/api/stocks | jq -e '. | length >= 7' >/dev/null \
+              && curl --max-time 3 -fsS http://127.0.0.1:9090/api/auth/status >/dev/null; then
               echo "Stock Service ready"; exit 0
             fi
             sleep 4
@@ -48,6 +49,16 @@ jobs:
           userId=$(echo "$register" | jq -r '.userId')
           test -n "$token"
           test "$userId" != "null"
+          ready=0
+          for i in $(seq 1 60); do
+            if curl --max-time 3 -fsS "$base/wallet/transactions/$userId" -H "Authorization: Bearer $token" >/dev/null \
+              && curl --max-time 3 -fsS "$base/orders/user/$userId" -H "Authorization: Bearer $token" >/dev/null \
+              && curl --max-time 3 -fsS "$base/portfolio/$userId" -H "Authorization: Bearer $token" >/dev/null; then
+              ready=1; break
+            fi
+            sleep 3
+          done
+          test "$ready" = 1
           auth="Authorization: Bearer $token"
           curl -fsS -X POST "$base/wallet/create" -H "$auth" -H 'Content-Type: application/json' -d "{\"userId\":$userId}" | jq -e '.balance == 0' >/dev/null
           curl -fsS -X POST "$base/wallet/deposit" -H "$auth" -H 'Content-Type: application/json' -d "{\"userId\":$userId,\"amount\":100000}" | jq -e '.balance == 100000' >/dev/null
