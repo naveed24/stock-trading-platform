@@ -45,7 +45,7 @@ public class PortfolioService {
     private void handleBuy(PortfolioUpdateRequest request, String stockSymbol) {
 
         Holding holding = holdingRepository
-                .findByUserIdAndStockSymbolIgnoreCase(request.getUserId(), stockSymbol)
+                .findForUpdate(request.getUserId(), stockSymbol)
                 .orElse(null);
 
         // If user is buying this stock for the first time.
@@ -86,7 +86,7 @@ public class PortfolioService {
     private void handleSell(PortfolioUpdateRequest request, String stockSymbol) {
 
         Holding holding = holdingRepository
-                .findByUserIdAndStockSymbolIgnoreCase(request.getUserId(), stockSymbol)
+                .findForUpdate(request.getUserId(), stockSymbol)
                 .orElseThrow(() -> new RuntimeException("No holding found for stock: " + stockSymbol));
 
         if (holding.getQuantity() < request.getQuantity()) {
