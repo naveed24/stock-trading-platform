@@ -22,13 +22,13 @@ public class GatewayConfig {
                         .uri("http://localhost:8083")
                 )
 //
-                // Wallet Service Route - future service
+                // Wallet Service Route
                 .route("wallet-service", route -> route
                         .path("/api/wallet/**")
                         .uri("http://localhost:8084")
                 )
 //
-                // Trading Service Route - future service
+                // Trading Service Route
                 .route("trading-service", route -> route
                         .path("/api/orders/**")
                         .uri("http://localhost:8085")
@@ -37,11 +37,6 @@ public class GatewayConfig {
                 .route("portfolio-service", route -> route
                         .path("/api/portfolio/**")
                         .uri("http://localhost:8086")
-                )
-
-                .route("trading-service-route", r -> r
-                        .path("/api/orders/**")
-                        .uri("http://localhost:8085")
                 )
 
                 .build();
