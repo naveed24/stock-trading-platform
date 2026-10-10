@@ -58,7 +58,7 @@ jobs:
           curl -fsS "$base/wallet/$userId" -H "$auth" | jq -e '.balance == 96150' >/dev/null
           test "$(curl -s -o /dev/null -w '%{http_code}' "$base/wallet/$userId")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$base/wallet/9999" -H "$auth")" = "403"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/wallet/deposit" -H "$auth" -H 'Content-Type: application/json' -d '{"userId":9999,"amount":100}') " = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/wallet/deposit" -H "$auth" -H 'Content-Type: application/json' -d '{"userId":9999,"amount":100}')" = "403"
           echo "Trade lifecycle and owner isolation verified."
       - name: Print logs on failure
         if: failure()
