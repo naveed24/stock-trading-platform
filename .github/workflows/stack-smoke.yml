@@ -1,0 +1,79 @@
+name: Full stack smoke test
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/stack-smoke.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate isolated test-only credentials
+        run: |
+          echo "DB_PASSWORD=$(openssl rand -hex 24)" >> .env
+          echo "JWT_SECRET=$(openssl rand -hex 48)" >> .env
+      - name: Validate compose configuration
+        run: docker compose config --quiet
+      - name: Build containers
+        run: |
+          export COMPOSE_PARALLEL_LIMIT=2
+          docker compose build
+      - name: Start services
+        run: docker compose up -d --no-build
+      - name: Wait for API and demo stock data
+        run: |
+          for i in $(seq 1 150); do
+            if curl --max-time 3 -fsS http://127.0.0.1:9090/api/stocks | jq -e '. | length >= 7' >/dev/null \
+              && curl --max-time 3 -fsS http://127.0.0.1:9090/api/auth/status >/dev/null; then
+              echo "Stock Service ready"; exit 0
+            fi
+            sleep 4
+          done
+          docker compose ps
+          docker compose logs --tail=120
+          exit 1
+      - name: Test simulated trade life cycle and gateway authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:9090/api
+          register=$(curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' -d '{"name":"CI Demo Trader","email":"ci-trader@example.test","password":"test-password-2026"}')
+          token=$(echo "$register" | jq -r '.accessToken')
+          userId=$(echo "$register" | jq -r '.userId')
+          test -n "$token"
+          test "$userId" != "null"
+          ready=0
+          for i in $(seq 1 60); do
+            if curl --max-time 3 -fsS "$base/wallet/transactions/$userId" -H "Authorization: Bearer $token" >/dev/null \
+              && curl --max-time 3 -fsS "$base/orders/user/$userId" -H "Authorization: Bearer $token" >/dev/null \
+              && curl --max-time 3 -fsS "$base/portfolio/$userId" -H "Authorization: Bearer $token" >/dev/null; then
+              ready=1; break
+            fi
+            sleep 3
+          done
+          test "$ready" = 1
+          auth="Authorization: Bearer $token"
+          curl -fsS -X POST "$base/wallet/create" -H "$auth" -H 'Content-Type: application/json' -d "{\"userId\":$userId}" | jq -e '.balance == 0' >/dev/null
+          curl -fsS -X POST "$base/wallet/deposit" -H "$auth" -H 'Content-Type: application/json' -d "{\"userId\":$userId,\"amount\":100000}" | jq -e '.balance == 100000' >/dev/null
+          curl -fsS -X POST "$base/orders/buy" -H "$auth" -H 'Content-Type: application/json' -d "{\"userId\":$userId,\"stockSymbol\":\"TCS\",\"quantity\":2}" | jq -e '.status == "EXECUTED" and .quantity == 2' >/dev/null
+          curl -fsS "$base/portfolio/$userId" -H "$auth" | jq -e '.holdings[0].quantity == 2' >/dev/null
+          curl -fsS -X POST "$base/orders/sell" -H "$auth" -H 'Content-Type: application/json' -d "{\"userId\":$userId,\"stockSymbol\":\"TCS\",\"quantity\":1}" | jq -e '.status == "EXECUTED" and .quantity == 1' >/dev/null
+          curl -fsS "$base/portfolio/$userId" -H "$auth" | jq -e '.holdings[0].quantity == 1' >/dev/null
+          curl -fsS "$base/wallet/$userId" -H "$auth" | jq -e '.balance == 96150' >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/wallet/$userId")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/wallet/9999" -H "$auth")" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/wallet/deposit" -H "$auth" -H 'Content-Type: application/json' -d '{"userId":9999,"amount":100}')" = "403"
+          echo "Trade lifecycle and owner isolation verified."
+      - name: Print logs on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --tail=200
+      - name: Shut down
+        if: always()
+        run: docker compose down -v --remove-orphans

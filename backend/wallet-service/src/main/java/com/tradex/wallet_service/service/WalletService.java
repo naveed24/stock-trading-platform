@@ -50,7 +50,7 @@ public class WalletService {
     @Transactional
     public WalletResponse deposit(AmountRequest request) {
 
-        Wallet wallet = getWallet(request.getUserId());
+        Wallet wallet = getWalletForUpdate(request.getUserId());
 
         wallet.setBalance(wallet.getBalance().add(request.getAmount()));
 
@@ -71,7 +71,7 @@ public class WalletService {
     @Transactional
     public WalletResponse withdraw(AmountRequest request){
 
-        Wallet wallet=getWallet(request.getUserId());
+        Wallet wallet = getWalletForUpdate(request.getUserId());
 
         BigDecimal availableBalance=calculateAvailableBalance(wallet);
 
@@ -98,7 +98,7 @@ public class WalletService {
     @Transactional
     public WalletResponse blockAmount(AmountRequest request) {
 
-        Wallet wallet = getWallet(request.getUserId());
+        Wallet wallet = getWalletForUpdate(request.getUserId());
 
         BigDecimal availableBalance = calculateAvailableBalance(wallet);
 
@@ -126,7 +126,7 @@ public class WalletService {
     @Transactional
     public WalletResponse releaseAmount(AmountRequest request) {
 
-        Wallet wallet = getWallet(request.getUserId());
+        Wallet wallet = getWalletForUpdate(request.getUserId());
 
         if (wallet.getBlockedAmount().compareTo(request.getAmount()) < 0) {
             throw new RuntimeException("Blocked amount is less than release amount");
@@ -151,7 +151,7 @@ public class WalletService {
     @Transactional
     public WalletResponse debitAmount(AmountRequest request) {
 
-        Wallet wallet = getWallet(request.getUserId());
+        Wallet wallet = getWalletForUpdate(request.getUserId());
 
         if (wallet.getBlockedAmount().compareTo(request.getAmount()) < 0) {
             throw new RuntimeException("Blocked amount is less than debit amount");
@@ -178,7 +178,7 @@ public class WalletService {
     @Transactional
     public WalletResponse creditAmount(AmountRequest request) {
 
-        Wallet wallet = getWallet(request.getUserId());
+        Wallet wallet = getWalletForUpdate(request.getUserId());
 
         wallet.setBalance(wallet.getBalance().add(request.getAmount()));
 
@@ -207,6 +207,12 @@ public class WalletService {
     // Helper method to fetch wallet or throw exception.
     private Wallet getWallet(Long userId) {
         return walletRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Wallet not found for user id: " + userId));
+    }
+
+    // Called only from @Transactional mutators to serialize concurrent balance changes.
+    private Wallet getWalletForUpdate(Long userId) {
+        return walletRepository.findByUserIdForUpdate(userId)
                 .orElseThrow(() -> new RuntimeException("Wallet not found for user id: " + userId));
     }
 

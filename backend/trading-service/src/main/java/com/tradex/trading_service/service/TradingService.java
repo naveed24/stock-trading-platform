@@ -78,6 +78,8 @@ public class TradingService {
         );
 
         boolean amountBlocked = false;
+        boolean portfolioUpdated = false;
+        boolean walletDebited = false;
 
         try {
 
@@ -107,12 +109,14 @@ public class TradingService {
             System.out.println("STEP 5: Updating portfolio");
 
             portfolioClient.updateHolding(portfolioRequest);
+            portfolioUpdated = true;
 
             System.out.println("STEP 5 SUCCESS");
 
             System.out.println("STEP 6: Debiting wallet");
 
             walletClient.debitAmount(walletRequest);
+            walletDebited = true;
 
             System.out.println("STEP 6 SUCCESS");
 
@@ -136,6 +140,18 @@ public class TradingService {
             );
 
             exception.printStackTrace();
+
+            // Best-effort compensation for failures confirmed before wallet debit.
+            // Remote timeouts after a successful call still need durable reconciliation.
+            if (portfolioUpdated && !walletDebited) {
+                try {
+                    portfolioClient.updateHolding(new PortfolioUpdateRequest(
+                            request.getUserId(), symbol, request.getQuantity(), price, "SELL"));
+                } catch (Exception rollbackFailure) {
+                    System.err.println("Manual reconciliation required for buy order "
+                            + order.getId() + ": " + rollbackFailure.getMessage());
+                }
+            }
 
             if (amountBlocked) {
                 try {
@@ -382,11 +398,15 @@ public class TradingService {
              */
 
             if (portfolioUpdated) {
-
-                System.out.println(
-                        "WARNING: Portfolio was updated "
-                                + "but wallet credit failed."
-                );
+                // Restore the original acquisition price when attempting a rollback.
+                try {
+                    portfolioClient.updateHolding(new PortfolioUpdateRequest(
+                            request.getUserId(), symbol, request.getQuantity(),
+                            holding.getAverageBuyPrice(), "BUY"));
+                } catch (Exception rollbackFailure) {
+                    System.err.println("Manual reconciliation required for sell order "
+                            + order.getId() + ": " + rollbackFailure.getMessage());
+                }
             }
 
             order.setStatus(

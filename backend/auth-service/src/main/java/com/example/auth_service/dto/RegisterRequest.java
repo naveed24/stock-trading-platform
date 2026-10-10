@@ -1,9 +1,8 @@
 package com.example.auth_service.dto;
 
-import com.example.auth_service.enums.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -20,8 +19,7 @@ public class RegisterRequest {
     private String email;
 
     @NotBlank(message="Password is required")
+    @Size(min=8, message="Password must contain at least 8 characters")
     private String password;
 
-    @NotNull(message="Role is required")
-    private Role role;
 }
