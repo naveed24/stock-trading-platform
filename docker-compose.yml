@@ -1,0 +1,123 @@
+name: tradex
+x-common: &db-env
+  DB_USER: root
+  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+  EUREKA_URL: http://discovery-server:8761/eureka/
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  discovery-server:
+    build: { context: ./backend/discovery-server, dockerfile: ../Dockerfile }
+    restart: unless-stopped
+    networks: [internal]
+
+  auth-service:
+    build: { context: ./backend/auth-service, dockerfile: ../Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/auth_db
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+    depends_on:
+      mysql: { condition: service_healthy }
+      discovery-server: { condition: service_started }
+    networks: [internal]
+
+  stock-service:
+    build: { context: ./backend/stock-service, dockerfile: ../Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/stock_db
+      TRADEX_SEED_DEMO: "true"
+    depends_on:
+      mysql: { condition: service_healthy }
+      discovery-server: { condition: service_started }
+    networks: [internal]
+
+  wallet-service:
+    build: { context: ./backend/wallet-service, dockerfile: ../Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/wallet_db
+    depends_on:
+      mysql: { condition: service_healthy }
+      discovery-server: { condition: service_started }
+    networks: [internal]
+
+  portfolio-service:
+    build: { context: ./backend/portfolio-service, dockerfile: ../Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/portfolio_db
+    depends_on:
+      mysql: { condition: service_healthy }
+      discovery-server: { condition: service_started }
+    networks: [internal]
+
+  trading-service:
+    build: { context: ./backend/trading-service, dockerfile: ../Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/trading_db
+      STOCK_SERVICE_URL: http://stock-service:8083
+      WALLET_SERVICE_URL: http://wallet-service:8084
+      PORTFOLIO_SERVICE_URL: http://portfolio-service:8086
+    depends_on:
+      mysql: { condition: service_healthy }
+      discovery-server: { condition: service_started }
+    networks: [internal]
+
+  api-gateway:
+    build: { context: ./backend/api-gateway, dockerfile: ../Dockerfile }
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    environment:
+      EUREKA_URL: http://discovery-server:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      STOCK_SERVICE_URL: http://stock-service:8083
+      WALLET_SERVICE_URL: http://wallet-service:8084
+      TRADING_SERVICE_URL: http://trading-service:8085
+      PORTFOLIO_SERVICE_URL: http://portfolio-service:8086
+    depends_on:
+      - discovery-server
+      - auth-service
+      - stock-service
+      - wallet-service
+      - portfolio-service
+      - trading-service
+    networks: [internal]
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on: [api-gateway]
+    networks: [internal]
+
+volumes:
+  mysql_data:
+
+networks:
+  internal:
+    driver: bridge

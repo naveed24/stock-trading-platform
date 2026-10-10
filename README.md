@@ -1,66 +1,94 @@
-# TradeX — Stock Trading Platform
+# TradeX — full-stack stock trading simulator
 
-TradeX is a **simulated** stock-trading platform built with Java 21, Spring Boot, Spring Cloud Gateway, Netflix Eureka, Spring Data JPA and MySQL. This repository currently contains the backend services. It does **not** execute trades on a real exchange or handle real-money payments.
+Java 21 + Spring Boot microservices + Spring Cloud Gateway + Eureka + MySQL + React/Vite.
 
-> **Project status (October 2026):** Core backend APIs are implemented, but the end-to-end application is not production-ready. The React frontend, robust authorization, distributed transaction recovery, comprehensive tests and deployment tooling are still pending. See "Known gaps" below.
+TradeX is an **educational paper-trading platform**, not a brokerage. Stock prices are fictional, static demo data. Wallet funds are simulated; it never moves real money or places orders on an exchange.
 
-## Backend services
+## Implemented user journey
 
-| Service | Port | Database | Purpose |
-| --- | ---: | --- | --- |
-| Discovery Server | 8761 | — | Service registration through Eureka |
-| API Gateway | 9090 | — | Entry point for backend API requests |
-| Auth Service | 8081 | `auth_db` | User registration, login, JWT issuance |
-| Stock Service | 8083 | `stock_db` | Stock catalog, search, prices |
-| Wallet Service | 8084 | `wallet_db` | Simulated deposits, withdrawals, balance holds and history |
-| Trading Service | 8085 | `trading_db` | Market BUY/SELL order processing and order history |
-| Portfolio Service | 8086 | `portfolio_db` | Holdings, valuations and transactions |
+1. Register a user or sign in.
+2. Explore demo stocks on the responsive React dashboard.
+3. A demo wallet is created on first sign-in. Add simulated funds.
+4. Submit a market BUY order: funds are reserved, the holding is updated, and funds are debited.
+5. Submit a market SELL order: shares are reduced and wallet funds credited.
+6. Review wallet activity, order history, portfolio positions, and performance.
 
-## Current API surface
+The UI reads real values from the backend; there is no mock frontend API. Portfolio values are based on the holding's last recorded price, not streaming market quotes.
 
-All examples use the gateway at `http://localhost:9090`:
+## Start locally with Docker
 
-- `POST /api/auth/register`, `POST /api/auth/login`
-- `GET /api/stocks`, `GET /api/stocks/{symbol}`, `GET /api/stocks/search?keyword=TCS`
-- `POST /api/wallet/create`, `POST /api/wallet/deposit`, `GET /api/wallet/{userId}`
-- `POST /api/orders/buy`, `POST /api/orders/sell`, `GET /api/orders/user/{userId}`
-- `GET /api/portfolio/{userId}`, `GET /api/portfolio/{userId}/holdings/{stockSymbol}`
+Requires Docker Engine/Desktop with Compose and enough memory for seven Java services plus MySQL.
 
-Some additional internal mutation endpoints exist. **Do not expose this implementation publicly:** authentication tokens are generated but not consistently enforced at the gateway or within business services.
-
-## Local setup (backend)
-
-**Prerequisites:** Java 21, Maven (or the Maven Wrapper included with each service), MySQL, and ports 8761, 9090, 8081, 8083, 8084, 8085, 8086 available.
-
-1. Create the MySQL databases: `auth_db`, `stock_db`, `wallet_db`, `trading_db`, `portfolio_db`.
-2. **Before any public use**, replace the example credentials and signing key currently hardcoded in `application.yml` with environment-specific secrets. The already committed JWT signing key must be treated as compromised and rotated.
-3. Run `backend/discovery-server` first, then the other services, with the gateway last. Each is an independent Maven project. For example, from a service folder, use `./mvnw spring-boot:run` on Linux/macOS or `mvnw.cmd spring-boot:run` on Windows.
-4. Check `http://localhost:8761` for Eureka registrations and `http://localhost:9090/api/stocks/status` for a gateway-to-service status response.
-5. Register a user, create the user wallet, add simulated funds, create stocks, and test BUY/SELL requests in an isolated local environment.
-
-**Important:** The current API accepts user IDs in request bodies and URLs without complete access-control enforcement. Use only fake users and simulated funds until that is fixed.
-
-## Known gaps / completion roadmap
-
-1. **Security first:** Move secrets into environment variables; add JWT validation at the gateway and authorization/ownership checks in each backend; secure internal-only portfolio and wallet operations; lock down admin stock mutations and Actuator.
-2. **Trading correctness:** Introduce idempotency keys and order state transitions, durable compensation/Saga logic for partial BUY/SELL failures, and concurrency control for wallet funds and holdings.
-3. **Quality:** Add unit, integration and end-to-end tests, including negative scenarios; verify all Maven builds in CI.
-4. **Frontend:** Add and connect the React/Vite UI (login, dashboard, stock search, buy/sell, wallet, portfolio, orders and charts). **No frontend directory is present in the GitHub main branch as of this audit.**
-5. **Developer experience:** Add local configuration examples, seed data, Docker Compose, CI/CD, API documentation, and deploy instructions.
-6. **Advanced features (optional):** Kafka event-driven updates, market-data simulation, price-history charts and monitoring.
-
-## Project structure
-
-```text
-backend/
-  discovery-server/
-  api-gateway/
-  auth-service/
-  stock-service/
-  wallet-service/
-  trading-service/
-  portfolio-service/
+```bash
+git clone https://github.com/naveed24/stock-trading-platform.git
+cd stock-trading-platform
+cp .env.example .env
 ```
 
-Each backend service has its own `pom.xml`. The frontend has not yet been committed to this repository.
+Edit `.env` and enter a strong unique `DB_PASSWORD` and a unique `JWT_SECRET` (at least 32 random bytes; `openssl rand -hex 48` is suitable). **Do not use any prior JWT key from Git history.**
 
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+The first build downloads Maven and npm dependencies, and services can take time to start.
+
+- Frontend: http://localhost:3000
+- API gateway: http://localhost:9090
+- Stop: `docker compose down`
+- Erase **all** demo data: `docker compose down -v` (destructive).
+
+MySQL and every individual backend service remain private to the Docker Compose network. The gateway enforces JWT validation, user ownership for outward-facing APIs, and ADMIN authorization for stock mutations. Internal wallet settlement and portfolio mutation endpoints are not exposed through the gateway.
+
+**Development configuration:** Each Maven module in `backend/` can also be started independently with Java 21 and MySQL. Configure `DB_PASSWORD` and `JWT_SECRET`; the gateway serves on 9090. For frontend hot-reload, `cd frontend && npm install && npm run dev` (http://localhost:5173). Only run direct backend ports on a trusted local machine; service-to-service operations do not have independent authorization.
+
+## Architecture
+
+```text
+Browser → Nginx / React UI → Spring Cloud Gateway :9090
+                                 ├─ auth-service :8081    → auth_db
+                                 ├─ stock-service :8083   → stock_db
+                                 ├─ wallet-service :8084  → wallet_db
+                                 ├─ trading-service :8085 → trading_db
+                                 └─ portfolio-service :8086 → portfolio_db
+            Eureka discovery :8761        MySQL :3306 (private)
+```
+
+Backend modules: `discovery-server`, `api-gateway`, `auth-service`, `stock-service`, `wallet-service`, `trading-service`, `portfolio-service`.
+
+## API examples
+
+All use `http://localhost:9090`.
+
+- `POST /api/auth/register` with `{"name":"Demo","email":"demo@example.com","password":"unique-password"}`
+- `POST /api/auth/login` with `{"email":"demo@example.com","password":"unique-password"}`
+- `GET /api/stocks`, `GET /api/stocks/{symbol}`, `GET /api/stocks/search?keyword=TCS`
+- `POST /api/wallet/create`, `POST /api/wallet/deposit` with a JSON `userId` matching the authenticated JWT subject
+- `GET /api/wallet/{userId}`, `GET /api/wallet/transactions/{userId}`
+- `POST /api/orders/buy`, `POST /api/orders/sell` with `{"userId":1,"stockSymbol":"TCS","quantity":1}`
+- `GET /api/orders/user/{userId}` and `GET /api/portfolio/{userId}`
+
+Protected calls require an `Authorization: Bearer <accessToken>` header after login.
+
+## Testing
+
+- `backend`: seven independent Maven modules; GitHub Actions compiles all seven.
+- `frontend`: `npm install && npm run build`; GitHub Actions builds the React UI.
+- Regression tests should be run against a disposable MySQL environment before deployment.
+- A successful compile does not establish business-transaction correctness.
+
+## Safety and remaining limitations
+
+**Local, educational demo only. Do not put this on the public internet or use real financial data.**
+
+- Gateway-level JWT and ownership checks depend on all downstream service ports remaining inaccessible externally. Direct service-to-service endpoints are currently trusted within the Docker network; they do not implement service identity verification.
+- Trades call multiple databases over HTTP; their updates are **not atomic**. A partial failure, timeout, retry, concurrent order, or process crash can leave wallet and portfolio records inconsistent. Before any serious use, implement a durable Saga/outbox, idempotency keys, compensation and concurrency controls.
+- JWT signing keys must be rotated from the hardcoded key published in prior Git commits. Set a new secret; old tokens will become invalid.
+- Demo prices are static and not licensed market feeds. Holdings don't automatically revalue until prices are updated.
+- The project is not a real-money wallet, investment adviser, stock exchange, or production brokerage.
+- CI is a build gate, not a complete automated test suite.
+
+## Branch strategy
+
+Work is submitted through reviewed pull requests. See the GitHub Actions tab for build results, and keep production deployment disabled until the limitations above are resolved.
