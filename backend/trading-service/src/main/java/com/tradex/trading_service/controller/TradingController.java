@@ -85,7 +85,7 @@ public class TradingController {
     @GetMapping("/user/{userId}/status/{status}")
     public ResponseEntity<List<OrderResponse>> getOrdersByStatus(
             @PathVariable Long userId,
-            @PathVariable 8OrderStatus status
+            @PathVariable OrderStatus status
     ) {
 
         return ResponseEntity.ok(
